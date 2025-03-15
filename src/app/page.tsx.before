@@ -1,0 +1,1772 @@
+'use client';
+
+import React from 'react';
+import { Search, Edit, Camera, Star, Grid, List, Shield, Plus, X, Heart, Trash2, Download, Upload, Map, Calendar, Check, ChevronDown, Move, ZoomIn, ZoomOut, RotateCcw, Minus } from 'lucide-react';
+
+// Définir un type TypeScript pour Profil
+interface Pokemon {
+  id: number;
+  name: string;
+  nameJp: string;
+  type: string;
+  rarity: string;
+  power: number;
+  height: string;
+  weight: string;
+  city: string;
+  favorite: boolean;
+  abilities: string[];
+  stats: { [key: string]: number };
+  description: string;
+  customImage: boolean;
+  imageData?: string;
+  score: number;
+  tags: string[];
+  meetingDate: string;
+}
+
+// Interface pour les données d'image
+interface ImageEditorData {
+  originalSrc: string;
+  position: { x: number, y: number };
+  zoomFactor: number;
+}
+
+// Fonction utilitaire pour vérifier si une chaîne est un JSON d'image
+const isJsonImage = (data: string): boolean => {
+  try {
+    if (!data || typeof data !== 'string') return false;
+    
+    // Vérifier que c'est un JSON bien formé
+    if (!data.startsWith('{')) return false;
+    
+    // Essayer de parser le JSON
+    const parsed = JSON.parse(data);
+    
+    // Vérification plus robuste de la structure
+    // Soit c'est un GIF (avec type === 'gif')
+    // Soit c'est une image transformée (avec position et zoomFactor)
+    return parsed && 
+           typeof parsed === 'object' && 
+           (
+             // Case 1: GIF image
+             (parsed.type === 'gif' && 
+              typeof parsed.originalSrc === 'string' &&
+              parsed.originalSrc.length > 0) ||
+             // Case 2: Transformed regular image
+             (typeof parsed.originalSrc === 'string' &&
+              parsed.originalSrc.length > 0 &&
+              parsed.position && 
+              typeof parsed.position.x === 'number' &&
+              typeof parsed.position.y === 'number' &&
+              typeof parsed.zoomFactor === 'number')
+           );
+  } catch (e) {
+    console.error("Erreur dans isJsonImage:", e);
+    return false;
+  }
+};
+
+// Fonction utilitaire pour extraire les données GIF
+const getGifData = (data: string) => {
+  try {
+    if (!data || typeof data !== 'string') return null;
+    
+    // Vérifier d'abord si c'est un JSON bien formé
+    if (data.startsWith('{') && data.endsWith('}')) {
+      const parsed = JSON.parse(data);
+      // Vérifier que les données ont la structure attendue
+      if (parsed && parsed.originalSrc && parsed.type === 'gif') {
+        return parsed;
+      }
+    }
+    return null;
+  } catch (e) {
+    console.error("Erreur d'analyse JSON:", e);
+    return null;
+  }
+};
+
+// Image de secours pour les erreurs de chargement
+const FALLBACK_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSIxNTAiIGN5PSIxNTAiIHI9IjE1MCIgZmlsbD0iI2YwZjBmMCIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSI4MCIgZmlsbD0iIzk5OTk5OSI+PzwvdGV4dD4KPC9zdmc+';
+
+// Gestionnaire d'erreur pour les images
+const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+  console.log("Erreur de chargement d'image détectée. Utilisation de l'image de secours.");
+  if (e && e.currentTarget) {
+    // Définir l'image de secours
+    e.currentTarget.src = FALLBACK_IMAGE;
+    // Ajouter une classe pour indiquer visuellement l'erreur
+    e.currentTarget.classList.add('image-error');
+  }
+};
+
+const RoisDeLaBZ = () => {
+  const [viewMode, setViewMode] = React.useState('grid');
+  const [activeTab, setActiveTab] = React.useState('home');
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [selectedPokemon, setSelectedPokemon] = React.useState<Pokemon | null>(null);
+  const [showAddForm, setShowAddForm] = React.useState(false);
+  const [showExportModal, setShowExportModal] = React.useState(false);
+  const [showImportModal, setShowImportModal] = React.useState(false);
+  const [editingField, setEditingField] = React.useState<string | null>(null);
+  
+  // États pour l'éditeur d'image
+  const [isEditingImage, setIsEditingImage] = React.useState(false);
+  const [imageToEdit, setImageToEdit] = React.useState<string | null>(null);
+  const [profileIdToEdit, setProfileIdToEdit] = React.useState<number | null>(null);
+  const [imagePosition, setImagePosition] = React.useState({ x: 0, y: 0 });
+  const [zoomFactor, setZoomFactor] = React.useState(1);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
+  
+  // Liste des villes de France (utilisée comme attributs/traits)
+  const frenchCities = [
+    "Paris", "Marseille", "Lyon", "Toulouse", "Nice", "Nantes", 
+    "Strasbourg", "Montpellier", "Bordeaux", "Lille", "Rennes", 
+    "Reims", "Saint-Étienne", "Toulon", "Le Havre", "Grenoble", 
+    "Dijon", "Angers", "Nîmes", "Clermont-Ferrand", "Tours", "Annecy"
+  ];
+  
+  // Options pour les caractéristiques
+  const personalityTypes = [
+    "Créative", "Aventurière", "Intellectuelle", "Séductrice", "Spontanée", "Mystérieuse",
+    "Passionnée", "Déterminée", "Artistique", "Sportive", "Introvertie", "Extravertie",
+    "Pragmatique", "Sensible", "Indépendante", "Ambitieuse", "Charismatique", "Réservée"
+  ];
+  
+  const lifestyleOptions = ["Indépendante", "Sociable", "Casanière", "Festive", "Voyageuse", "Équilibrée", "Workaholic", "Bohème", "Alternative", "Classique", "Luxe", "Minimaliste"];
+  
+  const silhouetteOptions = ["Athlétique", "Fine", "Moyenne", "Pulpeuse", "Voluptueuse", "Élancée", "Tonique", "Formée", "Entraînée", "Mannequin"];
+  
+  const heightOptions = [
+    "150 cm", "155 cm", "160 cm", "165 cm", "170 cm", "175 cm", "180 cm", "185 cm", "190 cm", "195 cm"
+  ];
+  
+  const weightOptions = [
+    "1 kg", "2 kg", "5 kg", "10 kg", "15 kg", "20 kg", "25 kg", "30 kg", "40 kg", "50 kg",
+    "55 kg", "60 kg", "65 kg", "70 kg", "75 kg", "80 kg", "85 kg", "90 kg", "95 kg", "100 kg", "150 kg", "200 kg", "300 kg"
+  ];
+  
+  const customTags = [
+    // Rencontres
+    { category: "Rencontre", tag: "Soirée" },
+    { category: "Rencontre", tag: "Vacances" },
+    { category: "Rencontre", tag: "Travail" },
+    { category: "Rencontre", tag: "Bar" },
+    { category: "Rencontre", tag: "Club" },
+    { category: "Rencontre", tag: "Festival" },
+    { category: "Rencontre", tag: "Premier RDV" },
+    { category: "Rencontre", tag: "Ami(e) commun(e)" },
+    { category: "Rencontre", tag: "Boîte" },
+    { category: "Rencontre", tag: "VIP" },
+    { category: "Rencontre", tag: "Étranger" },
+    { category: "Rencontre", tag: "Plage" },
+    { category: "Rencontre", tag: "Concert" },
+    
+    // Apps
+    { category: "App", tag: "Tinder" },
+    { category: "App", tag: "Bumble" },
+    { category: "App", tag: "Hinge" },
+    { category: "App", tag: "Happn" },
+    { category: "App", tag: "Fruitz" },
+    { category: "App", tag: "Grindr" },
+    { category: "App", tag: "OkCupid" },
+    
+    // Relations
+    { category: "Relation", tag: "Coup d'un soir" },
+    { category: "Relation", tag: "Relation" },
+    { category: "Relation", tag: "Ex" },
+    { category: "Relation", tag: "Plan cul régulier" },
+    { category: "Relation", tag: "Amis avec bénéfices" },
+    
+    // Activités
+    { category: "Intime", tag: "Fellation" },
+    { category: "Intime", tag: "Sodomie" },
+    { category: "Intime", tag: "BDSM" },
+    { category: "Intime", tag: "69" },
+    { category: "Intime", tag: "Trio" },
+    { category: "Intime", tag: "Lingerie" },
+    { category: "Intime", tag: "Dominatrice" },
+    { category: "Intime", tag: "Soumise" },
+    { category: "Intime", tag: "Exhib" },
+    { category: "Intime", tag: "Sexting" },
+    { category: "Intime", tag: "Plan cam" },
+    { category: "Intime", tag: "Préliminaires" },
+    { category: "Intime", tag: "Sextoy" },
+    { category: "Intime", tag: "Massage" },
+    
+    // Positions
+    { category: "Position", tag: "Levrette" },
+    { category: "Position", tag: "Missionnaire" },
+    { category: "Position", tag: "Amazone" },
+    { category: "Position", tag: "Cowgirl" },
+    { category: "Position", tag: "Cuillère" },
+    { category: "Position", tag: "69 debout" },
+    { category: "Position", tag: "Lotus" },
+    { category: "Position", tag: "Andromaque" },
+  ];
+
+  // Données Profil
+  const [pokemons, setPokemons] = React.useState<Pokemon[]>([
+    {
+      id: 1, 
+      name: 'Sophie',
+      nameJp: '腐った', 
+      type: 'Séductrice', 
+      rarity: 'Sociable', 
+      power: 85, 
+      height: '165 cm',
+      weight: 'Moyenne',
+      city: 'Paris',
+      favorite: true,
+      abilities: ['Initiative', 'Spontanéité', 'Charisme'],
+      stats: { initiative: 85, discrétion: 50, spontanéité: 95 },
+      description: 'Rencontrée lors d\'une soirée étudiante. Très vive et souriante.',
+      customImage: true,
+      imageData: undefined,
+      score: 78,
+      tags: ['Soirée', 'Premier RDV', 'Fellation'],
+      meetingDate: '2023-05-15'
+    },
+    {
+      id: 2, 
+      name: 'Camille',
+      nameJp: 'リザードン', 
+      type: 'Passionnée', 
+      rarity: 'Festive', 
+      power: 95, 
+      height: '171 cm',
+      weight: 'Athlétique',
+      city: 'Marseille',
+      favorite: true,
+      abilities: ['Charisme', 'Spontanéité', 'Initiative'],
+      stats: { initiative: 95, discrétion: 78, spontanéité: 90 },
+      description: 'Rencontrée en vacances. Passionnée et très intense.',
+      customImage: false,
+      imageData: undefined,
+      score: 92,
+      tags: ['Vacances', 'Étranger', 'Sodomie', '69'],
+      meetingDate: '2023-07-20'
+    },
+    {
+      id: 3, 
+      name: 'Emma',
+      nameJp: 'イーブイ', 
+      type: 'Aventurière', 
+      rarity: 'Indépendante', 
+      power: 70, 
+      height: '160 cm',
+      weight: 'Fine',
+      city: 'Lyon',
+      favorite: false,
+      abilities: ['Spontanéité', 'Initiative', 'Charisme'],
+      stats: { initiative: 70, discrétion: 65, spontanéité: 75 },
+      description: 'Match Tinder, versatile et imprévisible. Plusieurs personnalités en une.',
+      customImage: false,
+      imageData: undefined,
+      score: 68,
+      tags: ['Tinder', 'Coup d\'un soir', 'Fellation'],
+      meetingDate: '2023-09-05'
+    },
+    {
+      id: 4, 
+      name: 'Léa',
+      nameJp: 'ミュウツー', 
+      type: 'Intellectuelle', 
+      rarity: 'Équilibrée', 
+      power: 98, 
+      height: '175 cm',
+      weight: 'Élancée',
+      city: 'Nice',
+      favorite: true,
+      abilities: ['Charisme', 'Discrétion', 'Initiative'],
+      stats: { initiative: 98, discrétion: 90, spontanéité: 96 },
+      description: 'Mannequin rencontrée dans une soirée VIP. Intelligence exceptionnelle.',
+      customImage: false,
+      imageData: undefined,
+      score: 100,
+      tags: ['VIP', 'Festival', 'Lingerie', 'Soumise'],
+      meetingDate: '2023-11-10'
+    },
+    {
+      id: 5, 
+      name: 'Chloé',
+      nameJp: 'フシギバナ', 
+      type: 'Créative', 
+      rarity: 'Sociable', 
+      power: 88, 
+      height: '168 cm',
+      weight: 'Tonique',
+      city: 'Bordeaux',
+      favorite: false,
+      abilities: ['Initiative', 'Discrétion', 'Spontanéité'],
+      stats: { initiative: 82, discrétion: 83, spontanéité: 80 },
+      description: 'Rencontrée dans un bar à vin. Belle et élégante, repartie avec ses amies avant que je puisse lui proposer un verre.',
+      customImage: false,
+      imageData: undefined,
+      score: 89,
+      tags: ['Bar', 'Ami(e) commun(e)', 'Levrette'],
+      meetingDate: '2023-12-05'
+    }
+  ]);
+
+  // Cette variable n'est plus utilisée pour le recadrage mais gardons-la pour la détection du type de fichier
+  // Ajout d'un état pour détecter les GIF animés
+  const [isGif, setIsGif] = React.useState(false);
+
+  // Fonctions pour les interactions
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleSelectPokemon = (pokemon: any) => {
+    setSelectedPokemon(pokemon);
+    setEditingField(null);
+  };
+
+  const closeModal = () => {
+    setSelectedPokemon(null);
+    setEditingField(null);
+  };
+
+  const toggleAddForm = () => {
+    setShowAddForm(!showAddForm);
+  };
+
+  const toggleFavorite = (id: number) => {
+    setPokemons(pokemons.map(pokemon => 
+      pokemon.id === id ? {...pokemon, favorite: !pokemon.favorite} : pokemon
+    ));
+    
+    if (selectedPokemon && selectedPokemon.id === id) {
+      setSelectedPokemon({...selectedPokemon, favorite: !selectedPokemon.favorite});
+    }
+  };
+
+  const deletePokemon = (id: number) => {
+    setPokemons(pokemons.filter(pokemon => pokemon.id !== id));
+    closeModal();
+  };
+  
+  const toggleExportModal = () => {
+    setShowExportModal(!showExportModal);
+  };
+
+  const toggleImportModal = () => {
+    setShowImportModal(!showImportModal);
+  };
+
+  const toggleEditField = (field: string) => {
+    setEditingField(editingField === field ? null : field);
+  };
+
+  // Fonction pour calculer le score basé sur plusieurs facteurs
+  const calculateScore = (pokemon: Pokemon) => {
+    // Calcul des stats (70%)
+    const statsAvg = Object.values(pokemon.stats).reduce((a, b) => a + b, 0) / Object.values(pokemon.stats).length;
+    const statsScore = statsAvg * 0.7;
+    
+    // Calcul basé sur le charisme (15%)
+    const charismaScore = pokemon.power * 0.15;
+    
+    // Calcul basé sur le nombre d'activités (15%)
+    const maxActivities = 10; // Nombre maximum d'activités pour un score parfait
+    const activitiesScore = Math.min(pokemon.tags.length / maxActivities, 1) * 100 * 0.15;
+    
+    // Score final
+    return Math.round(statsScore + charismaScore + activitiesScore);
+  };
+
+  // Types pour l'éditeur d'image
+  interface ImageEditorData {
+    originalSrc: string;
+    position: { x: number; y: number };
+    zoomFactor: number;
+  }
+
+  // Rendu d'une image de Profil - fonction centralisée pour le rendu des images
+  const renderProfileImage = (champion: Pokemon, size: 'small' | 'medium' | 'large' = 'medium') => {
+    if (!champion.imageData) {
+      // Fallback pour les profils sans image
+      return (
+        <div className="bg-gray-200 w-full h-full flex items-center justify-center rounded-full" style={{ aspectRatio: '1/1' }}>
+          <span className="text-3xl">{champion.name.charAt(0)}</span>
+        </div>
+      );
+    }
+    
+    // Pour les images avec JSON de transformation
+    if (isJsonImage(champion.imageData)) {
+      try {
+        const imageDataObj = JSON.parse(champion.imageData) as ImageEditorData;
+        const imageSrc = imageDataObj.originalSrc;
+        const position = imageDataObj.position || { x: 0, y: 0 };
+        const zoom = imageDataObj.zoomFactor || 1;
+        
+        return (
+          <div 
+            className="w-full h-full" 
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: '50%',
+              aspectRatio: '1/1'
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                backgroundImage: `url(${imageSrc})`,
+                backgroundPosition: 'center',
+                backgroundSize: 'cover'
+              }}
+            ></div>
+          </div>
+        );
+      } catch (error) {
+        console.error("Erreur lors du parsing des données d'image:", error);
+        
+        // Fallback en cas d'erreur de parsing
+        return (
+          <div className="bg-gray-200 w-full h-full flex items-center justify-center rounded-full" style={{ aspectRatio: '1/1' }}>
+            <span className="text-3xl">{champion.name.charAt(0)}</span>
+          </div>
+        );
+      }
+    }
+    
+    // Pour les images avec source directe
+    return (
+      <div 
+        className="w-full h-full rounded-full bg-gray-100 flex items-center justify-center overflow-hidden" 
+        style={{ aspectRatio: '1/1' }}
+      >
+        <img 
+          src={champion.imageData} 
+          alt={`Portrait de ${champion.name}`}
+          className="w-full h-full object-cover" 
+        />
+      </div>
+    );
+  };
+
+  // Mise à jour des scores pour tous les profils
+  React.useEffect(() => {
+    const updatedPokemons = pokemons.map(pokemon => ({
+      ...pokemon,
+      score: calculateScore(pokemon)
+    }));
+    setPokemons(updatedPokemons);
+  }, []);
+
+  const updatePokemonField = (id: number, field: string, value: any) => {
+    console.log(`Mise à jour du champ ${field} pour le profil ${id}`);
+    
+    // Créer une copie profonde pour éviter des problèmes de référence
+    const updatedPokemons = pokemons.map(pokemon => {
+      if (pokemon.id === id) {
+        const updatedPokemon = {...pokemon, [field]: value};
+        
+        // Vérification spéciale pour les images
+        if (field === 'imageData') {
+          console.log("Mise à jour d'imageData, nouvelle valeur définie:", value ? "Oui" : "Non");
+          // S'assurer que customImage est aussi défini
+          updatedPokemon.customImage = true;
+        }
+        
+        // Recalculer le score après une mise à jour qui peut l'affecter
+        if (field === 'power' || field === 'tags') {
+          updatedPokemon.score = calculateScore(updatedPokemon);
+        }
+        
+        return updatedPokemon;
+      }
+      return pokemon;
+    });
+    
+    setPokemons(updatedPokemons);
+    
+    if (selectedPokemon && selectedPokemon.id === id) {
+      const updatedSelectedPokemon = {...selectedPokemon, [field]: value};
+      
+      // Vérification spéciale pour les images
+      if (field === 'imageData') {
+        // S'assurer que customImage est aussi défini
+        updatedSelectedPokemon.customImage = true;
+      }
+      
+      // Recalculer le score pour le profil sélectionné également
+      if (field === 'power' || field === 'tags') {
+        updatedSelectedPokemon.score = calculateScore(updatedSelectedPokemon);
+      }
+      
+      setSelectedPokemon(updatedSelectedPokemon);
+    }
+  };
+
+  const updatePokemonNestedField = (id: number, parentField: string, childField: string, value: any) => {
+    const updatedPokemons = pokemons.map(pokemon => {
+      if (pokemon.id === id) {
+        const pokemonData = pokemon as any;
+        const updatedPokemon = {
+          ...pokemon,
+          [parentField]: {
+            ...pokemonData[parentField],
+            [childField]: value
+          }
+        };
+        
+        // Recalculer le score après mise à jour des stats
+        if (parentField === 'stats') {
+          updatedPokemon.score = calculateScore(updatedPokemon);
+        }
+        
+        return updatedPokemon;
+      }
+      return pokemon;
+    });
+    
+    setPokemons(updatedPokemons);
+    
+    if (selectedPokemon && selectedPokemon.id === id) {
+      const pokemonData = selectedPokemon as any;
+      const updatedSelectedPokemon = {
+        ...selectedPokemon,
+        [parentField]: {
+          ...pokemonData[parentField],
+          [childField]: value
+        }
+      };
+      
+      // Recalculer le score pour le profil sélectionné également
+      if (parentField === 'stats') {
+        updatedSelectedPokemon.score = calculateScore(updatedSelectedPokemon);
+      }
+      
+      setSelectedPokemon(updatedSelectedPokemon);
+    }
+    
+    setEditingField(null);
+  };
+
+  // Style et couleurs selon type de profil avec des tons plus élégants et moins pastel
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'Créative':
+        return 'bg-gradient-to-br from-cyan-200 to-cyan-300 text-cyan-900';
+      case 'Aventurière':
+        return 'bg-gradient-to-br from-emerald-200 to-emerald-300 text-emerald-900';
+      case 'Intellectuelle':
+        return 'bg-gradient-to-br from-indigo-200 to-indigo-300 text-indigo-900';
+      case 'Séductrice':
+        return 'bg-gradient-to-br from-rose-200 to-rose-300 text-rose-900';
+      case 'Spontanée':
+        return 'bg-gradient-to-br from-amber-200 to-amber-300 text-amber-900';
+      case 'Mystérieuse':
+        return 'bg-gradient-to-br from-purple-200 to-purple-300 text-purple-900';
+      case 'Passionnée':
+        return 'bg-gradient-to-br from-red-200 to-red-300 text-red-900';
+      case 'Déterminée':
+        return 'bg-gradient-to-br from-blue-200 to-blue-300 text-blue-900';
+      case 'Artistique':
+        return 'bg-gradient-to-br from-fuchsia-200 to-fuchsia-300 text-fuchsia-900';
+      case 'Sportive':
+        return 'bg-gradient-to-br from-lime-200 to-lime-300 text-lime-900';
+      case 'Introvertie':
+        return 'bg-gradient-to-br from-slate-200 to-slate-300 text-slate-900';
+      case 'Extravertie':
+        return 'bg-gradient-to-br from-orange-200 to-orange-300 text-orange-900';
+      case 'Pragmatique':
+        return 'bg-gradient-to-br from-sky-200 to-sky-300 text-sky-900';
+      case 'Sensible':
+        return 'bg-gradient-to-br from-pink-200 to-pink-300 text-pink-900';
+      case 'Indépendante':
+        return 'bg-gradient-to-br from-teal-200 to-teal-300 text-teal-900';
+      case 'Ambitieuse':
+        return 'bg-gradient-to-br from-violet-200 to-violet-300 text-violet-900';
+      case 'Charismatique':
+        return 'bg-gradient-to-br from-yellow-200 to-yellow-300 text-yellow-900';
+      case 'Réservée':
+        return 'bg-gradient-to-br from-gray-200 to-gray-300 text-gray-900';
+      default:
+        return 'bg-gradient-to-br from-gray-200 to-gray-300 text-gray-900';
+    }
+  };
+
+  const getTypeColorBorder = (type: string) => {
+    switch (type) {
+      case 'Créative':
+        return 'border-cyan-200';
+      case 'Aventurière':
+        return 'border-emerald-200';
+      case 'Intellectuelle':
+        return 'border-indigo-200';
+      case 'Séductrice':
+        return 'border-rose-200';
+      case 'Spontanée':
+        return 'border-amber-200';
+      case 'Mystérieuse':
+        return 'border-purple-200';
+      case 'Passionnée':
+        return 'border-red-200';
+      case 'Déterminée':
+        return 'border-blue-200';
+      case 'Artistique':
+        return 'border-fuchsia-200';
+      case 'Sportive':
+        return 'border-lime-200';
+      case 'Introvertie':
+        return 'border-slate-200';
+      case 'Extravertie':
+        return 'border-orange-200';
+      case 'Pragmatique':
+        return 'border-sky-200';
+      case 'Sensible':
+        return 'border-pink-200';
+      case 'Indépendante':
+        return 'border-teal-200';
+      case 'Ambitieuse':
+        return 'border-violet-200';
+      case 'Charismatique':
+        return 'border-yellow-200';
+      case 'Réservée':
+        return 'border-gray-200';
+      default:
+        return 'border-gray-200';
+    }
+  };
+
+  // Nouvelle fonction: système de couleurs amélioré pour les scores
+  const getScoreGradient = (score: number) => {
+    // Système de couleurs professionnelles et élégantes
+    if (score < 40) {
+      // Bleu-gris léger pour les scores faibles
+      return 'bg-gradient-to-br from-slate-50 to-slate-200 text-slate-700 border border-slate-300/40';
+    } else if (score < 60) {
+      // Bleu-vert léger pour les scores moyens-faibles
+      return 'bg-gradient-to-br from-sky-50 to-sky-100 text-sky-700 border border-sky-200/40';
+    } else if (score < 75) {
+      // Turquoise pour les scores moyens
+      return 'bg-gradient-to-br from-teal-50 to-teal-100 text-teal-700 border border-teal-200/40';
+    } else if (score < 85) {
+      // Vert pour les bons scores
+      return 'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-700 border border-emerald-200/40';
+    } else if (score < 95) {
+      // Violet pour les très bons scores
+      return 'bg-gradient-to-br from-violet-50 to-violet-100 text-violet-700 border border-violet-200/40';
+    } else {
+      // Or/Ambre pour les scores excellents
+      return 'bg-gradient-to-br from-amber-50 to-amber-100 text-amber-700 border border-amber-200/40';
+    }
+  };
+
+  const getRarityStyle = (rarity: string) => {
+    switch (rarity) {
+      case 'Indépendante':
+        return 'text-teal-700';
+      case 'Sociable':
+        return 'text-blue-700';
+      case 'Casanière':
+        return 'text-indigo-700';
+      case 'Festive':
+        return 'text-pink-700';
+      case 'Voyageuse':
+        return 'text-emerald-700';
+      case 'Équilibrée':
+        return 'text-purple-700';
+      case 'Workaholic':
+        return 'text-slate-700';
+      case 'Bohème':
+        return 'text-amber-700';
+      case 'Alternative':
+        return 'text-sky-700';
+      case 'Classique':
+        return 'text-gray-700';
+      case 'Luxe':
+        return 'text-yellow-700';
+      case 'Minimaliste':
+        return 'text-stone-700';
+      default:
+        return 'text-gray-700';
+    }
+  };
+
+  // Filtrer les profils selon la recherche et l'onglet actif
+  const filteredProfiles = pokemons.filter(pokemon => {
+    const matchesSearch = pokemon.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          pokemon.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (pokemon.tags && pokemon.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
+    const matchesFavorites = activeTab === 'favorites' ? pokemon.favorite : true;
+    return matchesSearch && matchesFavorites;
+  });
+
+  // Export des données
+  const exportData = () => {
+    if (showExportModal) {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(pokemons));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "conquetes.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+      setShowExportModal(false);
+    }
+  };
+
+  // Import des données
+  const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        try {
+          if (event.target && typeof event.target.result === 'string') {
+            const fileExt = file.name.split('.').pop()?.toLowerCase();
+            
+            if (fileExt === 'json') {
+              // Traitement JSON existant
+              const importedData = JSON.parse(event.target.result);
+              if (Array.isArray(importedData)) {
+                setPokemons(importedData);
+                setShowImportModal(false);
+              }
+            } else if (fileExt === 'csv' || fileExt === 'xlsx' || fileExt === 'xls') {
+              // Traitement CSV/Excel (simulé - normalement nécessiterait une bibliothèque)
+              const rows = event.target.result.split('\n');
+              // Premier ligne contient les entêtes
+              const headers = rows[0].split(',').map(h => h.trim());
+              
+              const newPokemons: Pokemon[] = [];
+              // Parcourir chaque ligne à partir de la deuxième (index 1)
+              for (let i = 1; i < rows.length; i++) {
+                if (rows[i].trim() === '') continue; // Ignorer les lignes vides
+                
+                const values = rows[i].split(',').map(v => v.trim());
+                
+                // Mapper les données selon les entêtes connus
+                const nameIndex = headers.findIndex(h => 
+                  h.toLowerCase().includes('nom') || 
+                  h.toLowerCase().includes('name') || 
+                  h.toLowerCase() === 'prénom'
+                );
+                
+                const cityIndex = headers.findIndex(h => 
+                  h.toLowerCase().includes('ville') || 
+                  h.toLowerCase().includes('city') || 
+                  h.toLowerCase().includes('location')
+                );
+                
+                const typeIndex = headers.findIndex(h => 
+                  h.toLowerCase().includes('type') || 
+                  h.toLowerCase().includes('personnalité') || 
+                  h.toLowerCase().includes('personality')
+                );
+                
+                const dateIndex = headers.findIndex(h => 
+                  h.toLowerCase().includes('date') || 
+                  h.toLowerCase().includes('rencontre') || 
+                  h.toLowerCase().includes('meeting')
+                );
+                
+                const descriptionIndex = headers.findIndex(h => 
+                  h.toLowerCase().includes('description') || 
+                  h.toLowerCase().includes('notes') || 
+                  h.toLowerCase().includes('commentaire')
+                );
+                
+                // Définir un type selon les données, ou prendre un par défaut
+                let type = 'Créative';
+                if (typeIndex >= 0 && values[typeIndex]) {
+                  // Trouver le type le plus proche dans la liste des types disponibles
+                  const userType = values[typeIndex].toLowerCase();
+                  const matchingType = personalityTypes.find(t => 
+                    t.toLowerCase() === userType || 
+                    t.toLowerCase().includes(userType) || 
+                    userType.includes(t.toLowerCase())
+                  );
+                  if (matchingType) type = matchingType;
+                }
+                
+                // Créer un nouveau profil avec les données mappées
+                const newId = Math.max(...pokemons.map(p => p.id), 0) + 1 + i;
+                const newPokemon: Pokemon = {
+                  id: newId,
+                  name: nameIndex >= 0 && values[nameIndex] ? values[nameIndex] : `Profil ${newId}`,
+                  nameJp: '新しい', 
+                  type: type,
+                  rarity: 'Sociable', // Par défaut
+                  power: 50,
+                  height: '165 cm',
+                  weight: 'Moyenne',
+                  city: cityIndex >= 0 && values[cityIndex] ? values[cityIndex] : 'Paris',
+                  favorite: false,
+                  abilities: ['Initiative', 'Spontanéité', 'Charisme'],
+                  stats: { initiative: 50, discrétion: 50, spontanéité: 50 },
+                  description: descriptionIndex >= 0 && values[descriptionIndex] 
+                    ? values[descriptionIndex] 
+                    : 'Importé depuis fichier externe.',
+                  customImage: false,
+                  imageData: undefined,
+                  score: 50,
+                  tags: ['Importé'],
+                  meetingDate: dateIndex >= 0 && values[dateIndex] 
+                    ? new Date(values[dateIndex]).toISOString().split('T')[0]
+                    : new Date().toISOString().split('T')[0]
+                };
+                
+                newPokemons.push(newPokemon);
+              }
+              
+              // Ajouter les nouveaux profils à la liste existante
+              if (newPokemons.length > 0) {
+                setPokemons([...pokemons, ...newPokemons]);
+                setShowImportModal(false);
+              }
+            } else {
+              alert('Format de fichier non pris en charge. Utilisez JSON, CSV ou Excel.');
+            }
+          }
+        } catch (error) {
+          console.error("Erreur lors de l'importation des données :", error);
+          alert("Erreur lors de l'importation. Vérifiez le format de votre fichier.");
+        }
+      };
+      
+      reader.readAsText(file);
+    }
+  };
+
+  // Modification du gestionnaire d'upload d'image pour utiliser l'éditeur d'image
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, id: number) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Vérification du type de fichier
+      if (!file.type.match('image.*') && !file.type.match('image/gif')) {
+        alert("Seules les images sont acceptées");
+        return;
+      }
+      
+      // Vérification de la taille du fichier (5 Mo max)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("L'image ne doit pas dépasser 5 Mo");
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target && e.target.result) {
+          const imageData = e.target.result.toString();
+          
+          // Si c'est un GIF, ouvrir directement l'éditeur
+          if (file.type === 'image/gif') {
+            openImageEditor(imageData, id);
+          } else {
+            // Pour les autres images, ouvrir l'éditeur
+            openImageEditor(imageData, id);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Correction de la fonction pour gérer les dates sans décalage
+  const formatDate = (dateString: string) => {
+    // Ajouter 'T00:00:00' pour forcer l'interprétation en UTC
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC' // Utiliser UTC pour éviter le décalage horaire
+    });
+  };
+
+  // Rendu d'un champ éditable
+  const renderEditableField = (id: number, field: string, value: any, label: string, options?: string[]) => {
+    const isEditing = editingField === field;
+    
+    if (isEditing) {
+      if (field === 'meetingDate') {
+        return (
+          <div className="relative w-full p-2 rounded bg-white border shadow-sm">
+            <label htmlFor={`edit-${field}-${id}`} className="text-xs text-gray-500 mb-1 block">{label}</label>
+            <input 
+              id={`edit-${field}-${id}`}
+              type="date"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-zinc-300 text-base"
+              value={value}
+              onChange={(e) => updatePokemonField(id, field, e.target.value)}
+              autoFocus
+              onBlur={() => setEditingField(null)}
+              title={`Modifier la ${label.toLowerCase()}`}
+            />
+          </div>
+        );
+      } else if (options && options.length > 0) {
+        return (
+          <div className="relative w-full p-2 rounded bg-white border shadow-sm">
+            <label htmlFor={`edit-${field}-${id}`} className="text-xs text-gray-500 mb-1 block">{label}</label>
+            <select 
+              id={`edit-${field}-${id}`}
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-zinc-300 text-base"
+              value={value}
+              onChange={(e) => {
+                updatePokemonField(id, field, e.target.value);
+                setEditingField(null);
+              }}
+              autoFocus
+              title={`Sélectionner ${label}`}
+            >
+              {options.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+        );
+      } else {
+        return (
+          <div className="relative w-full p-2 rounded bg-white border shadow-sm">
+            <label htmlFor={`edit-${field}-${id}`} className="text-xs text-gray-500 mb-1 block">{label}</label>
+            <input 
+              id={`edit-${field}-${id}`}
+              type={field === 'score' || field === 'power' ? 'number' : 'text'}
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-zinc-300 text-base"
+              value={value}
+              min={field === 'score' || field === 'power' ? 0 : undefined}
+              max={field === 'score' || field === 'power' ? 100 : undefined}
+              onChange={(e) => updatePokemonField(id, field, e.target.value)}
+              autoFocus
+              onBlur={() => setEditingField(null)}
+              placeholder={`Entrez ${label.toLowerCase()}`}
+              title={`Entrez ${label.toLowerCase()}`}
+            />
+          </div>
+        );
+      }
+    }
+    
+    return (
+      <div 
+        className="p-2 rounded bg-white border hover:bg-gray-50 cursor-pointer shadow-sm"
+        onClick={() => toggleEditField(field)}
+      >
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className={`font-medium ${field === 'rarity' ? getRarityStyle(value) : ''}`}>
+          {field === 'meetingDate' 
+            ? formatDate(value) // Utiliser la nouvelle fonction formatDate 
+            : value
+          } {field === 'power' ? '✨' : ''}
+        </p>
+      </div>
+    );
+  };
+
+  // Fonctions pour l'éditeur d'image
+  const openImageEditor = (imageUrl: string, id: number) => {
+    setImageToEdit(imageUrl);
+    setProfileIdToEdit(id);
+    setImagePosition({ x: 0, y: 0 });
+    setZoomFactor(1);
+    setIsEditingImage(true);
+  };
+
+  const closeImageEditor = () => {
+    setIsEditingImage(false);
+    setImageToEdit(null);
+    setProfileIdToEdit(null);
+  };
+
+  const decreaseZoom = () => {
+    setZoomFactor(Math.max(0.5, zoomFactor - 0.1));
+  };
+
+  const increaseZoom = () => {
+    setZoomFactor(Math.min(3, zoomFactor + 0.1));
+  };
+
+  const handleDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleDragMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      const deltaX = e.clientX - dragStart.x;
+      const deltaY = e.clientY - dragStart.y;
+      
+      setImagePosition({
+        x: imagePosition.x + deltaX,
+        y: imagePosition.y + deltaY
+      });
+      
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  const validateImageEdit = () => {
+    if (profileIdToEdit !== null && imageToEdit) {
+      // Créer un objet avec les données d'image
+      const imageData: ImageEditorData = {
+        originalSrc: imageToEdit,
+        position: imagePosition,
+        zoomFactor: zoomFactor
+      };
+      
+      // Sauvegarder les données en JSON
+      const imageDataJson = JSON.stringify(imageData);
+      
+      // Mettre à jour l'image du profil
+      updatePokemonField(profileIdToEdit, 'imageData', imageDataJson);
+      
+      // Fermer l'éditeur
+      closeImageEditor();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 flex flex-col bg-gray-50 text-zinc-800 max-w-lg mx-auto shadow-xl">
+      {/* Barre de recherche */}
+      <div className="sticky top-0 z-10 bg-white p-3 border-b border-stone-200 flex items-center">
+        <div className="flex-1 flex items-center gap-2 px-2 py-1.5 border border-stone-200 bg-stone-50 rounded-full">
+          <Search size={18} className="text-gray-400" />
+          <input 
+            type="text" 
+            placeholder="Rechercher..." 
+            className="w-full bg-transparent outline-none text-sm"
+            value={searchTerm}
+            onChange={handleSearch}
+            id="searchTermInput"
+            name="searchTermInput"
+          />
+        </div>
+        <button 
+          onClick={toggleAddForm} 
+          className="ml-3 p-2 text-zinc-600 hover:bg-stone-100 rounded-full"
+          title="Ajouter un profil"
+        >
+          <Camera size={22} />
+        </button>
+      </div>
+
+      {/* Contenu principal */}
+      <div className="flex-1 overflow-auto p-3">
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 gap-4">
+            {filteredProfiles.map(pokemon => (
+              <div 
+                key={pokemon.id} 
+                className="border border-stone-200 bg-white cursor-pointer rounded-lg overflow-hidden shadow-sm relative" 
+                onClick={() => handleSelectPokemon(pokemon)}
+              >
+                <div className={`h-36 flex flex-col ${getTypeColor(pokemon.type)}`}>
+                  {/* Prénom avec position optimisée */}
+                  <div className="relative z-30 pt-[6px] pb-1 text-center w-full">
+                    <p className="text-lg font-semibold truncate max-w-[90%] mx-auto">{pokemon.name}</p>
+                  </div>
+                  
+                  <div className="flex-grow flex items-center justify-center relative">
+                    <div className="text-center w-full flex flex-col items-center h-full pb-3 pt-1">
+                      {/* Cercle plus petit et centré avec position fixe */}
+                      <div className="relative flex items-center justify-center">
+                        {/* Cercle principal avec bordure qui correspond à la couleur du fond */}
+                        <div className={`w-24 h-24 rounded-full flex items-center justify-center overflow-hidden relative z-10 border-2 ${getTypeColorBorder(pokemon.type)}`}>
+                          <div className="w-24 h-24 rounded-full bg-white/70 flex items-center justify-center overflow-hidden" style={{ aspectRatio: '1/1' }}>
+                            {renderProfileImage(pokemon, 'small')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-xs">{pokemon.type}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{formatDate(pokemon.meetingDate)}</p>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-medium bg-white/70 text-zinc-800 px-1.5 py-0.5 rounded-sm shadow-sm border border-zinc-100">{pokemon.score}</span>
+                        <button 
+                          onClick={(e) => {e.stopPropagation(); toggleFavorite(pokemon.id)}}
+                          title={pokemon.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                          className="flex items-center justify-center"
+                        >
+                          <Star className={`${pokemon.favorite ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Conteneur central pour équilibrer visuellement */}
+                  <div className="flex justify-between items-center mt-2 border-t border-gray-100 pt-1.5">
+                    {/* Tags - Simplifiés */}
+                    {pokemon.tags && pokemon.tags.length > 0 && (
+                      <div className="flex items-center">
+                        <span className="text-[10px] bg-stone-100 px-1.5 py-0.5 rounded-full">
+                          {pokemon.tags.length} activité{pokemon.tags.length > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <span className="text-[10px] text-gray-600">{pokemon.city}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredProfiles.map(pokemon => (
+              <div 
+                key={pokemon.id} 
+                className="border border-stone-200 bg-white cursor-pointer flex" 
+                onClick={() => handleSelectPokemon(pokemon)}
+              >
+                <div className={`w-16 h-16 flex items-center justify-center ${getTypeColor(pokemon.type)}`}>
+                  <div className="w-12 h-12 rounded-full bg-white/50 flex items-center justify-center overflow-hidden" style={{ aspectRatio: '1/1' }}>
+                    {renderProfileImage(pokemon, 'small')}
+                  </div>
+                </div>
+                <div className="p-3 flex-grow">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-medium">{pokemon.name}</p>
+                      <p className="text-[10px] text-gray-500">{pokemon.type} • {pokemon.city}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium bg-stone-100 px-2 py-0.5 rounded-sm border border-zinc-100">{pokemon.score}</span>
+                      <button 
+                        onClick={(e) => {e.stopPropagation(); toggleFavorite(pokemon.id)}}
+                        title={pokemon.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                      >
+                        <Star className={`${pokemon.favorite ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal pour les détails d'un Profil */}
+      {selectedPokemon && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeModal();
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-lg shadow-lg flex flex-col">
+            <div className="sticky top-0 z-10 bg-white">
+              <div className="flex justify-between items-center p-4 border-b">
+                <h2 className="text-lg font-semibold">Détails de {selectedPokemon.name}</h2>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={closeModal}
+                    className="p-2 rounded-full hover:bg-gray-100"
+                    title="Fermer"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 ${getTypeColor(selectedPokemon.type)} relative">
+              <div className="flex items-center">
+                {/* Photo de profil */}
+                <div className="w-24 h-24 rounded-full flex items-center justify-center shadow-lg mr-6 relative group overflow-hidden" style={{ aspectRatio: '1/1' }}>
+                  {renderProfileImage(selectedPokemon, 'medium')}
+                  
+                  {/* Bouton upload caché par dessus */}
+                  <label htmlFor={`photo-upload-${selectedPokemon.id}`} className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 group-hover:opacity-100 rounded-full cursor-pointer transition-opacity duration-200">
+                    <Camera size={18} />
+                  </label>
+                  <input 
+                    type="file" 
+                    id={`photo-upload-${selectedPokemon.id}`} 
+                    accept="image/*,.gif" 
+                    className="hidden" 
+                    onChange={(e) => handleImageUpload(e, selectedPokemon.id)}
+                  />
+                </div>
+                
+                {/* Informations de profil */}
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-zinc-900 mb-1 drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">{selectedPokemon.name}</h2>
+                  <div className="flex items-center mb-2">
+                    <span className="text-zinc-900 text-sm font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">{selectedPokemon.type}</span>
+                    <span className="mx-2 text-zinc-800/70">•</span>
+                    <span className="text-zinc-900 text-sm font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">{selectedPokemon.rarity}</span>
+                  </div>
+                  {selectedPokemon.meetingDate && (
+                    <div className="text-zinc-900 text-xs flex items-center drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">
+                      <Calendar size={12} className="mr-1" />
+                      {formatDate(selectedPokemon.meetingDate)}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Boutons d'action et score dans le coin */}
+                <div className="absolute top-2 right-2 flex gap-2 items-center">
+                  <button 
+                    onClick={() => toggleFavorite(selectedPokemon.id)}
+                    className="p-2 bg-white/80 rounded-full shadow-sm"
+                    title={selectedPokemon.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    <Heart className={`${selectedPokemon.favorite ? "text-red-500 fill-red-500" : "text-gray-400"}`} size={18} />
+                  </button>
+                  <div className={`px-2 py-1 rounded-full text-sm font-medium shadow-sm ${getScoreGradient(selectedPokemon.score)}`}>
+                    {selectedPokemon.score}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4">
+              {/* Caractéristiques principales avec menus déroulants */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {renderEditableField(selectedPokemon.id, 'type', selectedPokemon.type, 'Type', personalityTypes)}
+                {renderEditableField(selectedPokemon.id, 'city', selectedPokemon.city, 'Ville', frenchCities)}
+                {renderEditableField(selectedPokemon.id, 'rarity', selectedPokemon.rarity, 'Style de vie', lifestyleOptions)}
+                {renderEditableField(selectedPokemon.id, 'power', selectedPokemon.power, 'Charisme')}
+                {renderEditableField(selectedPokemon.id, 'height', selectedPokemon.height, 'Taille', heightOptions)}
+                {renderEditableField(selectedPokemon.id, 'weight', selectedPokemon.weight, 'Silhouette', silhouetteOptions)}
+                {renderEditableField(selectedPokemon.id, 'score', selectedPokemon.score, 'Score')}
+                {renderEditableField(selectedPokemon.id, 'meetingDate', selectedPokemon.meetingDate, 'Date rencontre')}
+
+                <div className="border rounded p-3 cursor-pointer overflow-hidden col-span-2" onClick={() => setEditingField(editingField === 'tags' ? null : 'tags')}>
+                  {editingField !== 'tags' && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Activités ({selectedPokemon.tags.length})</p>
+                      {selectedPokemon.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {selectedPokemon.tags.slice(0, 10).map((tag: string, i: number) => (
+                            <span 
+                              key={i} 
+                              className={`text-xs px-2 py-1 rounded-full ${
+                                ['Fellation', 'Sodomie', 'BDSM', '69', 'Trio', 'Levrette', 'Amazone', 'Cowgirl', 'Soumise', 'Dominatrice'].includes(tag) 
+                                  ? 'bg-pink-100 text-pink-800 font-medium' 
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {selectedPokemon.tags.length > 10 && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                              +{selectedPokemon.tags.length - 10}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500">Touchez pour ajouter des activités</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <h3 className="text-sm font-medium mb-2">Stats</h3>
+                <div className="space-y-3">
+                  {Object.entries(selectedPokemon.stats).map(([stat, value]) => (
+                    <div key={stat} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="capitalize">{stat}</span>
+                        <span>{value}/100</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        value={value} 
+                        onChange={(e) => updatePokemonNestedField(
+                          selectedPokemon.id, 
+                          'stats', 
+                          stat, 
+                          parseInt(e.target.value)
+                        )}
+                        className="w-full h-2 accent-zinc-600"
+                        title={`Ajuster ${stat}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <h3 className="text-sm font-medium mb-2">Description</h3>
+                {editingField === 'description' ? (
+                  <textarea 
+                    id={`pokemon-description-${selectedPokemon.id}`}
+                    name={`pokemon-description-${selectedPokemon.id}`}
+                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-zinc-300 text-sm"
+                    value={selectedPokemon.description}
+                    onChange={(e) => updatePokemonField(selectedPokemon.id, 'description', e.target.value)}
+                    rows={4}
+                    autoFocus
+                    onBlur={() => setEditingField(null)}
+                    placeholder="Ajoutez une description..."
+                    title="Modifier la description"
+                  />
+                ) : (
+                  <div 
+                    className="p-3 border rounded bg-gray-50 text-sm cursor-pointer"
+                    onClick={() => toggleEditField('description')}
+                  >
+                    {selectedPokemon.description || "Ajoutez une description..."}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modales d'export/import */}
+      {showExportModal && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              toggleExportModal();
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-sm rounded-lg shadow-lg p-5">
+            <h3 className="text-lg font-medium mb-3">Exporter vos profils</h3>
+            <p className="text-sm text-gray-600 mb-4">Téléchargez toutes vos profils dans un fichier JSON.</p>
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={toggleExportModal}
+                className="px-4 py-2 border border-zinc-300 rounded-md text-sm"
+                title="Annuler"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={exportData}
+                className="px-4 py-2 bg-green-500 text-white rounded-md text-sm"
+                title="Exporter"
+              >
+                Exporter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'import */}
+      {showImportModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4">
+          <div className="bg-white w-full max-w-sm rounded-lg shadow-lg p-5">
+            <h3 className="text-lg font-medium mb-3">Importer des profils</h3>
+            <p className="text-sm text-gray-600 mb-4">Chargez vos profils depuis un fichier JSON, CSV ou Excel.</p>
+            
+            <div className="mb-4 p-4 border border-dashed border-gray-300 rounded-lg text-center">
+              <label htmlFor="import-file" className="cursor-pointer flex flex-col items-center">
+                <Upload size={24} className="text-gray-400 mb-2" />
+                <span className="text-sm text-gray-500">Cliquez pour sélectionner un fichier</span>
+                <input 
+                  id="import-file"
+                  name="import-file"
+                  type="file"
+                  accept=".json,.csv,.xlsx"
+                  onChange={importData}
+                  className="hidden"
+                />
+              </label>
+            </div>
+            
+            <div className="flex justify-end">
+              <button 
+                onClick={toggleImportModal}
+                className="px-4 py-2 border border-zinc-300 rounded-md text-sm"
+                title="Annuler"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal pour ajouter un nouveau Profil */}
+      {showAddForm && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              toggleAddForm();
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-md rounded-lg shadow-lg p-5">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Ajouter un nouveau profil</h3>
+              <button 
+                onClick={toggleAddForm}
+                className="p-2 rounded-full hover:bg-gray-100"
+                title="Fermer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex justify-center mb-4">
+              <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center relative group cursor-pointer" style={{ aspectRatio: '1/1' }}>
+                <div className="text-2xl font-bold text-gray-400">+</div>
+                <label htmlFor="new-photo-upload" className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 group-hover:opacity-100 rounded-full cursor-pointer transition-opacity">
+                  <Camera size={20} />
+                  <span className="sr-only">Ajouter une photo</span>
+                </label>
+                <input 
+                  id="new-photo-upload" 
+                  type="file" 
+                  accept="image/*,.gif" 
+                  className="hidden" 
+                  onChange={(e) => {
+                    // Traitement de l'image avant l'ajout du profil
+                    if (e.target.files && e.target.files[0]) {
+                      const file = e.target.files[0];
+                      
+                      // Vérification de la taille du fichier (max 5MB)
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert("Le fichier est trop volumineux. Veuillez choisir une image de moins de 5MB.");
+                        return;
+                      }
+                      
+                      // Détection des GIFs pour le nouvel élément
+                      const isGifImage = file.type === 'image/gif';
+                      const reader = new FileReader();
+                      
+                      reader.onload = (event) => {
+                        if (event.target && event.target.result) {
+                          const imageData = event.target.result.toString();
+                          
+                          // Stockage temporaire de l'image
+                          const imageUploadPreview = document.getElementById('image-upload-preview');
+                          if (imageUploadPreview) {
+                            imageUploadPreview.style.backgroundImage = `url(${imageData})`;
+                            imageUploadPreview.style.backgroundSize = 'cover';
+                            imageUploadPreview.style.backgroundPosition = 'center';
+                            // Stockage de l'image dans un attribut data pour récupération lors de l'ajout
+                            // Pour les GIFs, stocker également cette information
+                            if (isGifImage) {
+                              const gifData: ImageEditorData = {
+                                type: 'gif',
+                                originalSrc: imageData,
+                                position: { x: 0, y: 0 },
+                                zoomFactor: 1
+                              };
+                              imageUploadPreview.setAttribute('data-image', JSON.stringify(gifData));
+                              imageUploadPreview.setAttribute('data-is-gif', 'true');
+                            } else {
+                              imageUploadPreview.setAttribute('data-image', imageData);
+                              imageUploadPreview.setAttribute('data-is-gif', 'false');
+                            }
+                          }
+                        }
+                      };
+                      
+                      reader.onerror = (error) => {
+                        console.error("Erreur de lecture du fichier:", error);
+                        alert("Une erreur est survenue lors de la lecture du fichier. Veuillez réessayer.");
+                      };
+                      
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <div id="image-upload-preview" className="absolute inset-0 rounded-full" style={{ aspectRatio: '1/1' }}></div>
+              </div>
+            </div>
+            
+            <div className="flex justify-center mb-4">
+              <button
+                className="w-full py-2.5 bg-green-500 text-white rounded-md text-sm"
+                onClick={() => {
+                  // Récupération de l'image depuis l'élément preview
+                  const imageUploadPreview = document.getElementById('image-upload-preview');
+                  const imageData = imageUploadPreview ? imageUploadPreview.getAttribute('data-image') || undefined : undefined;
+                  const isGifPreview = imageUploadPreview && imageUploadPreview.getAttribute('data-is-gif') === 'true';
+                  
+                  // Création d'un nouveau profil avec l'image si disponible
+                  const newId = Math.max(...pokemons.map(p => p.id)) + 1;
+                  const newPokemon: Pokemon = {
+                    id: newId,
+                    name: 'Nouveau profil',
+                    nameJp: '新しい', 
+                    type: 'Créative',
+                    rarity: 'Sociable',
+                    power: 50,
+                    height: '165 cm',
+                    weight: 'Moyenne',
+                    city: 'Paris',
+                    favorite: false,
+                    abilities: ['Initiative', 'Spontanéité', 'Charisme'],
+                    stats: { initiative: 50, discrétion: 50, spontanéité: 50 },
+                    description: 'Ajoutez une description...',
+                    customImage: imageData ? true : false,
+                    imageData: imageData,
+                    score: 50,
+                    tags: ['À classer'],
+                    meetingDate: new Date().toISOString().split('T')[0]
+                  };
+                  
+                  setPokemons([...pokemons, newPokemon]);
+                  setSelectedPokemon(newPokemon);
+                  setShowAddForm(false);
+                }}
+                className="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition-colors"
+              >
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barre de navigation */}
+      <div className="bg-white shadow-md border-t border-stone-200 py-2 sticky bottom-0 z-10">
+        <div className="flex justify-around">
+          <button 
+            className={`flex flex-col items-center justify-center px-3 py-1 ${activeTab === 'home' ? 'text-zinc-800' : 'text-zinc-400'}`}
+            onClick={() => setActiveTab('home')}
+          >
+            <Shield size={22} />
+            <span className="text-[10px] mt-1">Collection</span>
+          </button>
+          <button 
+            className={`flex flex-col items-center justify-center px-3 py-1 ${activeTab === 'favorites' ? 'text-zinc-800' : 'text-zinc-400'}`}
+            onClick={() => setActiveTab('favorites')}
+          >
+            <Star size={22} />
+            <span className="text-[10px] mt-1">Favoris</span>
+          </button>
+          <button 
+            className="flex flex-col items-center justify-center px-3 py-1 bg-zinc-800 text-white rounded-full -mt-4 w-14 h-14 shadow-md border-4 border-white"
+            onClick={toggleAddForm}
+          >
+            <Plus size={22} />
+            <span className="text-[10px] mt-0">Ajouter</span>
+          </button>
+          <button 
+            className={`flex flex-col items-center justify-center px-3 py-1 ${activeTab === 'battles' ? 'text-zinc-800' : 'text-zinc-400'}`}
+            onClick={() => setActiveTab('battles')}
+          >
+            <Map size={22} />
+            <span className="text-[10px] mt-1">Carte</span>
+          </button>
+          <div className="flex flex-col items-center">
+            <div className="flex">
+              <button 
+                onClick={toggleExportModal} 
+                className={`flex items-center justify-center px-2 py-1 ${activeTab === 'export' ? 'text-zinc-800' : 'text-zinc-400'}`}
+                title="Exporter les données"
+              >
+                <Download size={22} />
+              </button>
+              <button 
+                onClick={toggleImportModal} 
+                className={`flex items-center justify-center px-2 py-1 ${activeTab === 'import' ? 'text-zinc-800' : 'text-zinc-400'}`}
+                title="Importer des données"
+              >
+                <Upload size={22} />
+              </button>
+            </div>
+            <span className="text-[10px]">Import/Export</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Overlay pour fermer le menu d'édition des tags en cliquant ailleurs */}
+      {editingField === 'tags' && (
+        <div 
+          className="fixed inset-0 z-10" 
+          onClick={() => setEditingField(null)}
+        ></div>
+      )}
+
+      {/* Modal de sélection des activités */}
+      {editingField === 'tags' && selectedPokemon && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/50 z-30"
+          onClick={() => setEditingField(null)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-medium">Activités</h3>
+              <button 
+                onClick={() => setEditingField(null)}
+                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                title="Fermer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-3 overflow-y-auto flex-1">
+              {/* Groupes de tags par catégorie */}
+              {['Rencontre', 'App', 'Relation', 'Intime', 'Position'].map(category => (
+                <div key={category} className="mb-4">
+                  <h4 className="text-sm font-semibold mb-2 text-gray-700">{category}</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {customTags
+                      .filter(item => item.category === category)
+                      .map(item => (
+                        <button
+                          key={item.tag}
+                          className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+                            selectedPokemon.tags.includes(item.tag)
+                              ? category === 'Intime' || category === 'Position'
+                                ? 'bg-pink-500 text-white'
+                                : 'bg-zinc-700 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                          onClick={() => {
+                            const updatedTags = selectedPokemon.tags.includes(item.tag)
+                              ? selectedPokemon.tags.filter((t: string) => t !== item.tag)
+                              : [...selectedPokemon.tags, item.tag];
+                            updatePokemonField(selectedPokemon.id, 'tags', updatedTags);
+                          }}
+                        >
+                          {item.tag}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="p-3 border-t border-gray-200 bg-gray-50">
+              <button
+                className="w-full py-2.5 bg-green-500 text-white rounded-md text-sm"
+                onClick={() => setEditingField(null)}
+              >
+                <Check size={18} />
+                Terminé ({selectedPokemon.tags.length} sélectionnée{selectedPokemon.tags.length !== 1 ? 's' : ''})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Ajout du modal pour l'éditeur d'image */}
+      {isEditingImage && imageToEdit && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/70 z-30 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeImageEditor();
+            }
+          }}
+        >
+          <div className="bg-white w-full max-w-sm rounded-lg shadow-lg p-5">
+            <h3 className="text-lg font-medium mb-3">Ajuster votre photo</h3>
+            
+            {/* Conteneur principal centré */}
+            <div className="flex justify-center mb-5">
+              {/* Cercle parfait avec dimensions fixes */}
+              <div 
+                style={{
+                  width: '270px',
+                  height: '270px',
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  border: '3px solid #d1d5db',
+                  cursor: isDragging ? 'grabbing' : 'grab'
+                }}
+                onMouseDown={handleDragStart}
+                onMouseMove={handleDragMove}
+                onMouseUp={handleDragEnd}
+                onMouseLeave={handleDragEnd}
+              >
+                {/* Image avec transformations */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    transform: `translate(${imagePosition.x}px, ${imagePosition.y}px) scale(${zoomFactor})`,
+                    backgroundImage: `url(${imageToEdit})`,
+                    backgroundPosition: 'center',
+                    backgroundSize: 'cover'
+                  }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="text-center text-sm text-gray-500 mb-4">
+              Faites glisser l'image pour la repositionner
+            </div>
+            
+            <div className="flex justify-center mb-4">
+              <div className="flex items-center space-x-4">
+                <button 
+                  className="bg-gray-200 hover:bg-gray-300 rounded-full p-1"
+                  onClick={decreaseZoom}
+                >
+                  <Minus size={20} />
+                </button>
+                <span className="text-sm font-medium">Zoom: {Math.round(zoomFactor * 100)}%</span>
+                <button 
+                  className="bg-gray-200 hover:bg-gray-300 rounded-full p-1"
+                  onClick={increaseZoom}
+                >
+                  <Plus size={20} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex justify-between pt-3">
+              <button
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm"
+                onClick={closeImageEditor}
+              >
+                Annuler
+              </button>
+              <button
+                className="px-4 py-2 bg-green-500 text-white rounded-md text-sm"
+                onClick={validateImageEdit}
+              >
+                Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function Page() {
+  return <RoisDeLaBZ />;
+} 

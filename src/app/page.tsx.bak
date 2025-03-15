@@ -1,0 +1,700 @@
+'use client';
+
+import React from 'react';
+import { Search, Edit, Camera, Star, Grid, List, Shield, Plus, X, Heart, Trash2, Download, Upload, Map, Calendar, Check, ChevronDown } from 'lucide-react';
+
+// Définir un type TypeScript pour Pokemon
+interface Pokemon {
+  id: number;
+  name: string;
+  nameJp: string;
+  type: string;
+  rarity: string;
+  power: number;
+  height: string;
+  weight: string;
+  city: string;
+  favorite: boolean;
+  abilities: string[];
+  stats: { [key: string]: number };
+  description: string;
+  customImage: boolean;
+  imageData?: string; // URL de l'image sous forme de base64 ou undefined
+  score: number;
+  tags: string[];
+  meetingDate: string;
+}
+
+// Image de coeur en base64
+const heartImageBase64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBjbGFzcz0ibHVjaWRlIGx1Y2lkZS1oZWFydCI+PHBhdGggZD0iTTIwLjg0IDQuNjFhNS41IDUuNSAwIDAgMC03Ljc4IDBMMTIgNS42N2wtMS4wNi0xLjA2YTUuNSA1LjUgMCAwIDAtNy43OCA3Ljc4bDEuMDYgMS4wNkwxMiAyMS4yM2w3Ljc4LTcuNzggMS4wNi0xLjA2YTUuNSA1LjUgMCAwIDAgMC03Ljc4eiIgZmlsbD0iI2ZjNjI2MiIvPjwvc3ZnPg==";
+
+const RoisDeLaBZ = () => {
+  const [viewMode, setViewMode] = React.useState('grid');
+  const [activeTab, setActiveTab] = React.useState('home');
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [selectedPokemon, setSelectedPokemon] = React.useState<Pokemon | null>(null);
+  const [showAddForm, setShowAddForm] = React.useState(false);
+  const [showExportModal, setShowExportModal] = React.useState(false);
+  const [showImportModal, setShowImportModal] = React.useState(false);
+  const [editingField, setEditingField] = React.useState<string | null>(null);
+  
+  // Liste des villes de France (utilisée comme attributs/traits)
+  const frenchCities = [
+    "Paris", "Marseille", "Lyon", "Toulouse", "Nice", "Nantes", 
+    "Strasbourg", "Montpellier", "Bordeaux", "Lille", "Rennes", 
+    "Reims", "Saint-Étienne", "Toulon", "Le Havre", "Grenoble", 
+    "Dijon", "Angers", "Nîmes", "Clermont-Ferrand", "Tours", "Annecy"
+  ];
+  
+  // Options pour les caractéristiques
+  const personalityTypes = [
+    "Créative", "Aventurière", "Intellectuelle", "Séductrice", "Spontanée", "Mystérieuse",
+    "Passionnée", "Déterminée", "Artistique", "Sportive", "Introvertie", "Extravertie",
+    "Pragmatique", "Sensible", "Indépendante", "Ambitieuse", "Charismatique", "Réservée"
+  ];
+  
+  const lifestyleOptions = ["Indépendante", "Sociable", "Casanière", "Festive", "Voyageuse", "Équilibrée", "Workaholic", "Bohème", "Alternative", "Classique", "Luxe", "Minimaliste"];
+  
+  const silhouetteOptions = ["Athlétique", "Fine", "Moyenne", "Pulpeuse", "Voluptueuse", "Élancée", "Tonique", "Formée", "Entraînée", "Mannequin"];
+  
+  const heightOptions = [
+    "150 cm", "155 cm", "160 cm", "165 cm", "170 cm", "175 cm", "180 cm", "185 cm", "190 cm", "195 cm"
+  ];
+  
+  const weightOptions = [
+    "1 kg", "2 kg", "5 kg", "10 kg", "15 kg", "20 kg", "25 kg", "30 kg", "40 kg", "50 kg",
+    "55 kg", "60 kg", "65 kg", "70 kg", "75 kg", "80 kg", "85 kg", "90 kg", "95 kg", "100 kg", "150 kg", "200 kg", "300 kg"
+  ];
+  
+  const customTags = [
+    "Soirée", "Vacances", "Travail", "Tinder", "Bar", "Club", "Festival", 
+    "Premier RDV", "Coup d'un soir", "Relation", "Ex", "VIP", "Étranger",
+    "Boîte", "Ami(e) commun(e)", "Bumble", "Hinge", "Happn", "Fruitz",
+    "Fellation", "Sodomie", "BDSM", "69", "Trio", "Lingerie", "Dominatrice", 
+    "Soumise", "Exhib", "Sexting", "Plan cam", "Préliminaires", "Levrette",
+    "Missionnaire", "Amazone", "Cowgirl", "Cuillère"
+  ];
+
+  // Données Pokémon
+  const [pokemons, setPokemons] = React.useState<Pokemon[]>([
+    {
+      id: 1, 
+      name: 'Sophie',
+      nameJp: '腐った', 
+      type: 'Séductrice', 
+      rarity: 'Sociable', 
+      power: 85, 
+      height: '165 cm',
+      weight: 'Moyenne',
+      city: 'Paris',
+      favorite: true,
+      abilities: ['Initiative', 'Spontanéité', 'Charisme'],
+      stats: { initiative: 85, discrétion: 50, spontanéité: 95 },
+      description: 'Rencontrée lors d\'une soirée étudiante. Très vive et souriante.',
+      customImage: true,
+      imageData: undefined,
+      score: 78,
+      tags: ['Soirée', 'Premier RDV', 'Fellation'],
+      meetingDate: '2023-05-15'
+    },
+    {
+      id: 2, 
+      name: 'Camille',
+      nameJp: 'リザードン', 
+      type: 'Passionnée', 
+      rarity: 'Festive', 
+      power: 95, 
+      height: '171 cm',
+      weight: 'Athlétique',
+      city: 'Marseille',
+      favorite: true,
+      abilities: ['Charisme', 'Spontanéité', 'Initiative'],
+      stats: { initiative: 95, discrétion: 78, spontanéité: 90 },
+      description: 'Rencontrée en vacances. Passionnée et très intense.',
+      customImage: false,
+      imageData: undefined,
+      score: 92,
+      tags: ['Vacances', 'Étranger', 'Sodomie', '69'],
+      meetingDate: '2023-07-20'
+    },
+    {
+      id: 3, 
+      name: 'Emma',
+      nameJp: 'イーブイ', 
+      type: 'Aventurière', 
+      rarity: 'Indépendante', 
+      power: 70, 
+      height: '160 cm',
+      weight: 'Fine',
+      city: 'Lyon',
+      favorite: false,
+      abilities: ['Spontanéité', 'Initiative', 'Charisme'],
+      stats: { initiative: 70, discrétion: 65, spontanéité: 75 },
+      description: 'Match Tinder, versatile et imprévisible. Plusieurs personnalités en une.',
+      customImage: false,
+      imageData: undefined,
+      score: 68,
+      tags: ['Tinder', 'Coup d\'un soir', 'Fellation'],
+      meetingDate: '2023-09-05'
+    },
+    {
+      id: 4, 
+      name: 'Léa',
+      nameJp: 'ミュウツー', 
+      type: 'Intellectuelle', 
+      rarity: 'Équilibrée', 
+      power: 98, 
+      height: '175 cm',
+      weight: 'Élancée',
+      city: 'Nice',
+      favorite: true,
+      abilities: ['Charisme', 'Discrétion', 'Initiative'],
+      stats: { initiative: 98, discrétion: 90, spontanéité: 96 },
+      description: 'Mannequin rencontrée dans une soirée VIP. Intelligence exceptionnelle.',
+      customImage: false,
+      imageData: undefined,
+      score: 100,
+      tags: ['VIP', 'Festival', 'Lingerie', 'Soumise'],
+      meetingDate: '2023-11-10'
+    },
+    {
+      id: 5, 
+      name: 'Chloé',
+      nameJp: 'フシギバナ', 
+      type: 'Créative', 
+      rarity: 'Sociable', 
+      power: 88, 
+      height: '168 cm',
+      weight: 'Tonique',
+      city: 'Bordeaux',
+      favorite: false,
+      abilities: ['Initiative', 'Discrétion', 'Spontanéité'],
+      stats: { initiative: 82, discrétion: 83, spontanéité: 80 },
+      description: 'Rencontrée dans un bar à vin. Belle et élégante, repartie avec ses amies avant que je puisse lui proposer un verre.',
+      customImage: false,
+      imageData: undefined,
+      score: 89,
+      tags: ['Bar', 'Ami(e) commun(e)', 'Levrette'],
+      meetingDate: '2023-12-05'
+    }
+  ]);
+
+  // Style et couleurs selon type de pokémon
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'Créative': return 'bg-cyan-100 text-cyan-900';
+      case 'Aventurière': return 'bg-emerald-100 text-emerald-900';
+      case 'Intellectuelle': return 'bg-indigo-100 text-indigo-900';
+      case 'Séductrice': return 'bg-rose-100 text-rose-900';
+      case 'Spontanée': return 'bg-amber-100 text-amber-900';
+      case 'Mystérieuse': return 'bg-purple-100 text-purple-900';
+      case 'Passionnée': return 'bg-red-100 text-red-900';
+      case 'Déterminée': return 'bg-blue-100 text-blue-900';
+      default: return 'bg-gray-100 text-gray-900';
+    }
+  };
+
+  // Correction de la fonction pour gérer les dates sans décalage
+  const formatDate = (dateString: string) => {
+    // Ajouter 'T00:00:00' pour forcer l'interprétation en UTC
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC' // Utiliser UTC pour éviter le décalage horaire
+    });
+  };
+
+  // Filtrer les pokémon selon la recherche et l'onglet actif
+  const filteredPokemons = pokemons.filter(pokemon => {
+    const matchesSearch = pokemon.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         pokemon.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (pokemon.tags && pokemon.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
+    const matchesFavorites = activeTab === 'favorites' ? pokemon.favorite : true;
+    return matchesSearch && matchesFavorites;
+  });
+
+  // Fonctions nécessaires
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleSelectPokemon = (pokemon: Pokemon) => {
+    setSelectedPokemon(pokemon);
+  };
+
+  const closeModal = () => {
+    setSelectedPokemon(null);
+  };
+
+  const toggleFavorite = (id: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    
+    setPokemons(pokemons.map(pokemon => 
+      pokemon.id === id ? {...pokemon, favorite: !pokemon.favorite} : pokemon
+    ));
+    
+    if (selectedPokemon && selectedPokemon.id === id) {
+      setSelectedPokemon({...selectedPokemon, favorite: !selectedPokemon.favorite});
+    }
+  };
+
+  const deletePokemon = (id: number) => {
+    setPokemons(pokemons.filter(pokemon => pokemon.id !== id));
+    closeModal();
+  };
+
+  const toggleExportModal = () => {
+    setShowExportModal(!showExportModal);
+  };
+
+  const toggleImportModal = () => {
+    setShowImportModal(!showImportModal);
+  };
+
+  // Export des données
+  const exportData = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(pokemons));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "conquetes.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    setShowExportModal(false);
+  };
+
+  // Ajout de la fonction d'upload de photo
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, id: number) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        if (event.target && typeof event.target.result === 'string') {
+          const imageData = event.target.result;
+          
+          // Mise à jour du Pokémon avec la nouvelle image
+          const updatedPokemons = pokemons.map(pokemon => 
+            pokemon.id === id ? {...pokemon, customImage: true, imageData} : pokemon
+          );
+          
+          setPokemons(updatedPokemons);
+          
+          if (selectedPokemon && selectedPokemon.id === id) {
+            setSelectedPokemon({
+              ...selectedPokemon,
+              customImage: true,
+              imageData
+            });
+          }
+        }
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // JSX du composant
+  return (
+    <div className="fixed inset-0 flex flex-col bg-gray-50 text-zinc-800 max-w-lg mx-auto shadow-xl">
+      {/* Barre de recherche */}
+      <div className="sticky top-0 z-10 bg-white p-3 border-b border-stone-200 flex items-center">
+        <div className="flex-1 flex items-center gap-2 px-2 py-1.5 border border-stone-200 bg-stone-50 rounded-full">
+          <Search size={18} className="text-gray-400" />
+          <input 
+            type="text" 
+            placeholder="Rechercher..." 
+            className="w-full bg-transparent outline-none text-sm"
+            value={searchTerm}
+            onChange={handleSearch}
+          />
+        </div>
+        <button 
+          onClick={() => setShowAddForm(true)} 
+          className="ml-3 p-2 text-zinc-600 hover:bg-stone-100 rounded-full"
+          title="Ajouter une conquête"
+        >
+          <Camera size={22} />
+        </button>
+      </div>
+
+      {/* Contenu principal - Vue en grille */}
+      <div className="flex-1 overflow-auto p-3">
+        <div className="grid grid-cols-2 gap-4">
+          {filteredPokemons.map(pokemon => (
+            <div 
+              key={pokemon.id} 
+              className="border border-stone-200 bg-white cursor-pointer rounded-lg overflow-hidden shadow-sm relative" 
+              onClick={() => handleSelectPokemon(pokemon)}
+            >
+              <div className={`h-28 flex items-center justify-center ${getTypeColor(pokemon.type)}`}>
+                <div className="text-center w-full px-1">
+                  <p className="text-lg font-medium truncate max-w-[90%] mx-auto">{pokemon.name}</p>
+                  <div className="w-20 h-20 mx-auto rounded-full bg-white/50 flex items-center justify-center overflow-hidden relative mt-1">
+                    {pokemon.imageData ? (
+                      <img src={pokemon.imageData} alt={pokemon.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <img src={heartImageBase64} alt="Coeur par défaut" className="w-14 h-14 object-contain" />
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="absolute top-1 right-1 bg-white/90 text-zinc-800 text-xs font-medium px-2 py-0.5 rounded-md shadow-sm">
+                {pokemon.score}/100
+              </div>
+              
+              <div className="p-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{pokemon.type}</span>
+                      <span className="text-xs text-gray-500">•</span>
+                      <span className="text-xs">{pokemon.rarity}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{formatDate(pokemon.meetingDate)}</p>
+                  </div>
+                  <button 
+                    onClick={(e) => toggleFavorite(pokemon.id, e)}
+                    title={pokemon.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    <Star className={`${pokemon.favorite ? "text-amber-400 fill-amber-400" : "text-gray-300"}`} size={16} />
+                  </button>
+                </div>
+                
+                {/* Tags */}
+                {pokemon.tags && pokemon.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 my-1">
+                    {pokemon.tags.slice(0, 2).map((tag, i) => (
+                      <span key={i} className="text-xs bg-stone-100 px-1.5 py-0.5 rounded">
+                        {tag}
+                      </span>
+                    ))}
+                    {pokemon.tags.length > 2 && (
+                      <span className="text-xs bg-stone-100 px-1.5 py-0.5 rounded">
+                        +{pokemon.tags.length - 2}
+                      </span>
+                    )}
+                  </div>
+                )}
+                
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-xs text-gray-700">{pokemon.city}</span>
+                  <span className="text-xs text-gray-700">{pokemon.power} ✨</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Modal détail Pokémon */}
+      {selectedPokemon && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4">
+          <div className="bg-white w-full max-w-lg max-h-[90vh] overflow-auto rounded-lg shadow-lg flex flex-col">
+            <div className="sticky top-0 z-10 bg-white">
+              <div className="flex justify-between items-center p-4 border-b">
+                <h2 className="text-lg font-semibold">{selectedPokemon.name}</h2>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={closeModal}
+                    className="p-2 rounded-full hover:bg-gray-100"
+                    title="Fermer"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className={`p-5 ${getTypeColor(selectedPokemon.type)} relative`}>
+              <div className="flex items-center">
+                {/* Photo de profil */}
+                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-lg mr-4 relative group overflow-hidden">
+                  {selectedPokemon.imageData ? (
+                    <img src={selectedPokemon.imageData} alt={selectedPokemon.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <img src={heartImageBase64} alt="Coeur par défaut" className="w-16 h-16 object-contain" />
+                  )}
+                  
+                  {/* Bouton upload caché par dessus */}
+                  <label htmlFor="photo-upload" className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 group-hover:opacity-100 rounded-full cursor-pointer transition-opacity">
+                    <Camera size={20} />
+                    <span className="sr-only">Changer la photo</span>
+                  </label>
+                  <input 
+                    id="photo-upload" 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => handleImageUpload(e, selectedPokemon.id)}
+                  />
+                </div>
+                
+                {/* Informations de profil */}
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-zinc-900 mb-1 drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">{selectedPokemon.name}</h2>
+                  <div className="flex items-center mb-2">
+                    <span className="text-zinc-900 text-sm font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">{selectedPokemon.type}</span>
+                    <span className="mx-2 text-zinc-800/70">•</span>
+                    <span className="text-zinc-900 text-sm font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">{selectedPokemon.rarity}</span>
+                  </div>
+                  {selectedPokemon.meetingDate && (
+                    <div className="text-zinc-900 text-xs flex items-center drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">
+                      <Calendar size={12} className="mr-1" />
+                      {formatDate(selectedPokemon.meetingDate)}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Boutons d'action et score dans le coin */}
+                <div className="absolute top-2 right-2 flex gap-2 items-center">
+                  <div className="bg-white/90 text-zinc-800 font-medium text-sm px-2.5 py-1 rounded-md shadow-sm">
+                    {selectedPokemon.score}/100
+                  </div>
+                  <button 
+                    onClick={() => toggleFavorite(selectedPokemon.id)}
+                    className="p-2 bg-white/80 rounded-full shadow-sm"
+                    title={selectedPokemon.favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    <Heart className={`${selectedPokemon.favorite ? "text-red-500 fill-red-500" : "text-gray-400"}`} size={18} />
+                  </button>
+                  <button 
+                    onClick={() => deletePokemon(selectedPokemon.id)}
+                    className="p-2 bg-white/80 rounded-full shadow-sm"
+                    title="Supprimer"
+                  >
+                    <Trash2 size={18} className="text-gray-500" />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Infos principales */}
+              <div className="flex justify-between items-center mt-6 p-3 bg-white/40 rounded backdrop-blur-sm shadow-inner">
+                <div className="flex flex-col items-center">
+                  <span className="text-sm text-zinc-900 font-medium">Charisme</span>
+                  <div className="text-base font-medium text-zinc-900 flex items-center">
+                    {selectedPokemon.power} <span className="ml-1">✨</span>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <span className="text-sm text-zinc-900 font-medium">Stats moyennes</span>
+                  <div className="text-base font-medium text-zinc-900">
+                    {Math.round((Object.values(selectedPokemon.stats).reduce((a, b) => a + b, 0)) / Object.values(selectedPokemon.stats).length)}
+                  </div>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <span className="text-sm text-zinc-900 font-medium">Silhouette</span>
+                  <div className="text-base font-medium text-zinc-900">{selectedPokemon.weight}</div>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <span className="text-sm text-zinc-900 font-medium">Ville</span>
+                  <div className="text-base font-medium text-zinc-900">{selectedPokemon.city}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4">
+              <div className="mb-4">
+                <h3 className="text-sm font-medium mb-2">Description</h3>
+                <div className="p-3 border rounded bg-gray-50 text-sm">
+                  {selectedPokemon.description || "Aucune description..."}
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <h3 className="text-sm font-medium mb-2">Tags</h3>
+                <div className="flex flex-wrap gap-1 p-3 border rounded bg-gray-50">
+                  {selectedPokemon.tags.map((tag, i) => (
+                    <span 
+                      key={i} 
+                      className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {selectedPokemon.tags.length === 0 && (
+                    <span className="text-xs text-gray-500">Aucun tag</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal export */}
+      {showExportModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4">
+          <div className="bg-white w-full max-w-sm rounded-lg shadow-lg p-5">
+            <h3 className="text-lg font-medium mb-3">Exporter vos conquêtes</h3>
+            <p className="text-sm text-gray-600 mb-4">Téléchargez toutes vos conquêtes dans un fichier JSON.</p>
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={toggleExportModal}
+                className="px-4 py-2 border border-zinc-300 rounded-md text-sm"
+                title="Annuler"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={exportData}
+                className="px-4 py-2 bg-zinc-800 text-white rounded-md text-sm"
+                title="Exporter"
+              >
+                Exporter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal import */}
+      {showImportModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4">
+          <div className="bg-white w-full max-w-sm rounded-lg shadow-lg p-5">
+            <h3 className="text-lg font-medium mb-3">Importer des conquêtes</h3>
+            <p className="text-sm text-gray-600 mb-4">Cette fonctionnalité sera bientôt disponible.</p>
+            
+            <div className="flex justify-end">
+              <button 
+                onClick={toggleImportModal}
+                className="px-4 py-2 border border-zinc-300 rounded-md text-sm"
+                title="Fermer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ajout nouveau profil */}
+      {showAddForm && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-20 p-4">
+          <div className="bg-white w-full max-w-md rounded-lg shadow-lg p-5">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Ajouter une nouvelle conquête</h3>
+              <button 
+                onClick={() => setShowAddForm(false)}
+                className="p-2 rounded-full hover:bg-gray-100"
+                title="Fermer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex justify-center mb-4">
+              <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center relative group cursor-pointer">
+                <img src={heartImageBase64} alt="Coeur par défaut" className="w-14 h-14 object-contain" />
+              </div>
+            </div>
+            
+            <div className="mb-5">
+              <button 
+                onClick={() => {
+                  // Création d'un nouveau Pokémon avec l'image par défaut
+                  const newId = Math.max(...pokemons.map(p => p.id)) + 1;
+                  const newPokemon: Pokemon = {
+                    id: newId,
+                    name: 'Nouvelle conquête',
+                    nameJp: '新しい', 
+                    type: 'Créative',
+                    rarity: 'Sociable',
+                    power: 50,
+                    height: '165 cm',
+                    weight: 'Moyenne',
+                    city: 'Paris',
+                    favorite: false,
+                    abilities: ['Initiative', 'Discrétion', 'Spontanéité'],
+                    stats: { initiative: 50, discrétion: 50, spontanéité: 50 },
+                    description: 'Ajoutez une description...',
+                    customImage: false,
+                    imageData: undefined,
+                    score: 50,
+                    tags: ['À classer'],
+                    meetingDate: new Date().toISOString().split('T')[0]
+                  };
+                  
+                  setPokemons([...pokemons, newPokemon]);
+                  setSelectedPokemon(newPokemon);
+                  setShowAddForm(false);
+                }}
+                className="w-full bg-zinc-800 text-white py-3 rounded-lg hover:bg-zinc-700 transition-colors"
+              >
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barre de navigation avec boutons correctement espacés */}
+      <div className="bg-white shadow-md border-t border-stone-200 py-2 sticky bottom-0 z-10">
+        <div className="flex justify-around">
+          <button 
+            className={`flex flex-col items-center justify-center px-3 py-1 ${activeTab === 'home' ? 'text-zinc-800' : 'text-zinc-400'}`}
+            onClick={() => setActiveTab('home')}
+          >
+            <Shield size={22} />
+            <span className="text-[10px] mt-1">Collection</span>
+          </button>
+          
+          <button 
+            className={`flex flex-col items-center justify-center px-3 py-1 ${activeTab === 'favorites' ? 'text-zinc-800' : 'text-zinc-400'}`}
+            onClick={() => setActiveTab('favorites')}
+          >
+            <Star size={22} />
+            <span className="text-[10px] mt-1">Favoris</span>
+          </button>
+          
+          <button 
+            className="flex flex-col items-center justify-center px-3 py-1 bg-zinc-800 text-white rounded-full -mt-4 w-14 h-14 shadow-md border-4 border-white"
+            onClick={() => setShowAddForm(true)}
+          >
+            <Plus size={22} />
+            <span className="text-[10px] mt-0">Ajouter</span>
+          </button>
+          
+          <button 
+            className={`flex flex-col items-center justify-center px-3 py-1 ${activeTab === 'map' ? 'text-zinc-800' : 'text-zinc-400'}`}
+            onClick={() => setActiveTab('map')}
+          >
+            <Map size={22} />
+            <span className="text-[10px] mt-1">Carte</span>
+          </button>
+          
+          {/* Boutons import/export bien espacés */}
+          <div className="flex flex-col items-center">
+            <div className="flex gap-4">
+              <button 
+                onClick={toggleImportModal} 
+                className="flex items-center justify-center text-zinc-400"
+                title="Importer des données"
+              >
+                <Upload size={22} />
+              </button>
+              <button 
+                onClick={toggleExportModal} 
+                className="flex items-center justify-center text-zinc-400"
+                title="Exporter les données"
+              >
+                <Download size={22} />
+              </button>
+            </div>
+            <span className="text-[10px]">Import/Export</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function Page() {
+  return <RoisDeLaBZ />;
+}
